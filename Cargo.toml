@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+chrono = "0.4.42"
+diesel = { version = "2.3.2", features = ["chrono", "postgres", "r2d2", "serde_json"] }
 dotenvy = "0.15.7"
 futures = "0.3.31"
 lapin = "3.6.0"

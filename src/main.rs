@@ -1,5 +1,6 @@
 use std::{env, sync::LazyLock};
 
+use diesel::prelude::*;
 use futures::StreamExt;
 use lapin::{BasicProperties, Connection, ConnectionProperties, options::*, types::FieldTable};
 use serde_json::Value;
@@ -8,6 +9,11 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 static QUEUE: LazyLock<String> =
     LazyLock::new(|| env::var("RABBITMQ_QUEUE").expect("RABBITMQ_QUEUE env var not set"));
+mod database;
+mod models;
+mod schema;
+use crate::database::establish_connection;
+use crate::models::Country;
 
 #[tokio::main]
 async fn main() {
@@ -20,6 +26,8 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    use crate::schema::country::dsl::*;
+    let connection = &mut establish_connection();
     // connect to RabbitMQ server
     let host = env::var("RABBITMQ_HOST").expect("RABBITMQ_HOST env var not set");
     let port = env::var("RABBITMQ_PORT").unwrap_or_else(|_| "5672".into());
@@ -88,6 +96,15 @@ async fn main() {
                 .and_then(|c| c.as_str())
             {
                 Some("findByCriteria") => {
+                    let results = country
+                        // .filter(published.eq(true))
+                        .limit(5)
+                        .select(Country::as_select())
+                        .load(connection)
+                        .expect("Error loading countries");
+                    
+                    info!("Found {} countries", results.len());
+
                     info!("Processing findByCriteria command");
                     // Aquí iría la lógica específica para este comando
                 }
