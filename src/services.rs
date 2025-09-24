@@ -40,7 +40,7 @@ impl<'a> CountryController<'a> {
                     .unwrap_or_else(|_| CountryQuery::default());
                 match self.get_countries(country_query) {
                     Ok(countries) => serde_json::json!(countries),
-                    Err(e) => serde_json::json!({"error": e.to_string()}),
+                    Err(e) => serde_json::json!({"message": e.to_string()}),
                 }
             }
             "createCountry" => {
@@ -48,7 +48,7 @@ impl<'a> CountryController<'a> {
                     .expect("Invalid create country payload");
                 match self.create_country(create_request) {
                     Ok(created_country) => serde_json::json!(created_country),
-                    Err(e) => serde_json::json!({"error": e.to_string()}),
+                    Err(e) => serde_json::json!({"message": e.to_string()}),
                 }
             }
             "updateCountry" => {
@@ -63,7 +63,7 @@ impl<'a> CountryController<'a> {
                     .expect("Invalid update country payload");
                 match self.update_country(country_id, update_payload) {
                     Ok(updated_country) => serde_json::json!(updated_country),
-                    Err(e) => serde_json::json!({"error": e.to_string()}),
+                    Err(e) => serde_json::json!({"message": e.to_string()}),
                 }
             }
             "removeCountry" => {
@@ -73,12 +73,12 @@ impl<'a> CountryController<'a> {
                     .expect("Missing or invalid country ID");
                 match self.delete_country(country_id) {
                     Ok(deleted_count) => serde_json::json!({"deleted": deleted_count}),
-                    Err(e) => serde_json::json!({"error": e.to_string()}),
+                    Err(e) => serde_json::json!({"message": e.to_string()}),
                 }
             }
             _ => {
                 println!("Unknown command");
-                serde_json::json!({"error": "Unknown command"})
+                serde_json::json!({"message": "Unknown command"})
             }
         }
     }
@@ -108,6 +108,43 @@ impl<'a> CountryController<'a> {
     ) -> Result<Country, diesel::result::Error> {
         // Lógica para crear un país
         let new_country = _payload;
+        let mut duplicate_messages = Vec::new();
+        let existing_by_code: Option<Country> = country
+            .filter(code.eq(&new_country.code))
+            .first(self.conn)
+            .optional()?;
+        if existing_by_code.is_some() {
+            duplicate_messages.push(format!(
+                "Country with code {} already exists",
+                new_country.code
+            ));
+        }
+        let existing_by_name: Option<Country> = country
+            .filter(name.eq(&new_country.name))
+            .first(self.conn)
+            .optional()?;
+        if existing_by_name.is_some() {
+            duplicate_messages.push(format!(
+                "Country with name {} already exists",
+                new_country.name
+            ));
+        }
+        let existing_by_dial_code: Option<Country> = country
+            .filter(dial_code.eq(&new_country.dial_code))
+            .first(self.conn)
+            .optional()?;
+        if existing_by_dial_code.is_some() {
+            duplicate_messages.push(format!(
+                "Country with dial code {} already exists",
+                new_country.dial_code
+            ));
+        }
+        if !duplicate_messages.is_empty() {
+            return Err(diesel::result::Error::DatabaseError(
+                diesel::result::DatabaseErrorKind::UniqueViolation,
+                Box::new(duplicate_messages.join(", ")),
+            ));
+        }
         diesel::insert_into(country)
             .values((
                 name.eq(new_country.name),
