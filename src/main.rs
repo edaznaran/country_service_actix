@@ -1,6 +1,5 @@
 use std::{env, sync::LazyLock};
 
-use diesel::prelude::*;
 use futures::StreamExt;
 use lapin::{BasicProperties, Connection, ConnectionProperties, options::*, types::FieldTable};
 use serde_json::Value;
@@ -9,11 +8,11 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 static QUEUE: LazyLock<String> =
     LazyLock::new(|| env::var("RABBITMQ_QUEUE").expect("RABBITMQ_QUEUE env var not set"));
-mod database;
-mod models;
-mod schema;
-use crate::database::establish_connection;
-use crate::models::Country;
+mod db;
+use db::database::establish_connection;
+use db::models;
+use db::schema;
+mod services;
 
 #[tokio::main]
 async fn main() {
@@ -26,8 +25,8 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    use crate::schema::country::dsl::*;
     let connection = &mut establish_connection();
+    let mut country_controller = services::CountryController { conn: connection };
     // connect to RabbitMQ server
     let host = env::var("RABBITMQ_HOST").expect("RABBITMQ_HOST env var not set");
     let port = env::var("RABBITMQ_PORT").unwrap_or_else(|_| "5672".into());
@@ -81,16 +80,27 @@ async fn main() {
             .unwrap()
             .to_string();
         let payload_str = std::str::from_utf8(&delivery.data).unwrap();
-        let response = format!(
+        info!(
+            "Received message with correlation_id {}: {}",
+            correlation_id, payload_str
+        );
+        /* let response = format!(
             "Received RPC request with correlation_id {}: {}",
             correlation_id, payload_str,
         );
-        info!("{}", response);
-
+        info!("{}", response); */
+        let mut response: Value = Value::Null;
         // --- Lógica de negocio ---
         // Aquí procesas el payload y generas una respuesta.
         if let Ok(json_payload) = serde_json::from_str::<Value>(payload_str) {
-            match json_payload
+            let command = json_payload
+                .get("pattern")
+                .and_then(|p| p.get("cmd"))
+                .and_then(|c| c.as_str())
+                .unwrap_or("");
+            let payload = json_payload.get("data").cloned().unwrap_or(Value::Null);
+            response = country_controller.controller(command, payload);
+            /* match json_payload
                 .get("pattern")
                 .and_then(|p| p.get("cmd"))
                 .and_then(|c| c.as_str())
@@ -102,7 +112,7 @@ async fn main() {
                         .select(Country::as_select())
                         .load(connection)
                         .expect("Error loading countries");
-                    
+
                     info!("Found {} countries", results.len());
 
                     info!("Processing findByCriteria command");
@@ -119,12 +129,13 @@ async fn main() {
                 _ => {
                     info!("Unknown command");
                 }
-            }
+            } */
         } else {
             info!("Failed to parse payload as JSON");
+            // response = Vec::new();
         }
 
-        let response_payload = serde_json::json!({"data": response}).to_string();
+        let response_payload = response.to_string();
         // let response_payload = format!("Response to '{}'", payload_str);
         // -------------------------
 

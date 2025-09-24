@@ -450,6 +450,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -552,6 +553,7 @@ dependencies = [
  "futures",
  "lapin",
  "rabbitmq-stream-client",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",

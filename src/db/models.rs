@@ -1,6 +1,6 @@
 use diesel::prelude::*;
 
-#[derive(Queryable, Selectable)]
+#[derive(Queryable, Selectable, Debug, serde::Serialize)]
 #[diesel(table_name = crate::schema::audit_log)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct AuditLog {
@@ -11,7 +11,7 @@ pub struct AuditLog {
     pub created_at: chrono::NaiveDateTime,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Queryable, Selectable, Debug, serde::Serialize)]
 #[diesel(table_name = crate::schema::country)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Country {
