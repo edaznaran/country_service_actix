@@ -51,6 +51,31 @@ impl<'a> CountryController<'a> {
                     Err(e) => serde_json::json!({"error": e.to_string()}),
                 }
             }
+            "updateCountry" => {
+                let country_id = payload
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|v| v.parse::<i32>().ok())
+                    .expect("Missing or invalid country ID");
+                let update_payload = payload
+                    .get("updateCountryDto")
+                    .and_then(|v| serde_json::from_value::<UpdateCountryRequest>(v.clone()).ok())
+                    .expect("Invalid update country payload");
+                match self.update_country(country_id, update_payload) {
+                    Ok(updated_country) => serde_json::json!(updated_country),
+                    Err(e) => serde_json::json!({"error": e.to_string()}),
+                }
+            }
+            "removeCountry" => {
+                let country_id = payload
+                    .as_str()
+                    .and_then(|v| v.parse::<i32>().ok())
+                    .expect("Missing or invalid country ID");
+                match self.delete_country(country_id) {
+                    Ok(deleted_count) => serde_json::json!({"deleted": deleted_count}),
+                    Err(e) => serde_json::json!({"error": e.to_string()}),
+                }
+            }
             _ => {
                 println!("Unknown command");
                 serde_json::json!({"error": "Unknown command"})
@@ -91,5 +116,29 @@ impl<'a> CountryController<'a> {
             ))
             .returning(Country::as_returning())
             .get_result(self.conn)
+    }
+
+    fn update_country(
+        &mut self,
+        _id: i32,
+        _payload: UpdateCountryRequest,
+    ) -> Result<Country, diesel::result::Error> {
+        // Lógica para actualizar un país
+        let target = country.filter(id.eq(_id));
+        let updated_country = _payload;
+
+        diesel::update(target)
+            .set((
+                updated_country.name.map(|n| name.eq(n)),
+                updated_country.code.map(|c| code.eq(c)),
+                updated_country.dial_code.map(|d| dial_code.eq(d)),
+            ))
+            .get_result(self.conn)
+    }
+
+    fn delete_country(&mut self, _id: i32) -> Result<usize, diesel::result::Error> {
+        // Lógica para eliminar un país
+        let target = country.filter(id.eq(_id));
+        diesel::delete(target).execute(self.conn)
     }
 }
